@@ -1,0 +1,129 @@
+%matplotlib inline
+import numpy as np
+import pandas as pd
+from scipy import stats
+import matplotlib.pyplot as plt
+import seaborn as sns
+import sys
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder
+# Importing Classifier Modules
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC, LinearSVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.linear_model import Perceptron
+from sklearn.linear_model import SGDClassifier
+from sklearn.ensemble import GradientBoostingClassifier
+from xgboost.sklearn import XGBClassifier
+from lightgbm import LGBMClassifier
+#Metrics
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import cross_val_score
+from sklearn.feature_selection import chi2
+from sklearn.feature_selection import VarianceThreshold
+
+sys.path.append('C:\\Users\\Daniel Ji\\OneDrive\\Documents\\Python Files')
+import methods
+
+data = pd.read_csv('diabetes_binary_health_indicators_BRFSS2015.csv')
+data
+
+data.columns
+
+## Select names of categorical columns
+category_cols = ['HighBP', 'HighChol', 'CholCheck', 'BMI', 'Smoker',
+       'Stroke', 'HeartDiseaseorAttack', 'PhysActivity', 'Fruits', 'Veggies',
+       'HvyAlcoholConsump', 'AnyHealthcare', 'NoDocbcCost', 'GenHlth',
+       'MentHlth', 'PhysHlth', 'DiffWalk', 'Sex', 'Age', 'Education','Income']
+cat_all = category_cols.copy()
+
+# Plot a heatmap for correlation comparison
+variables = pd.DataFrame(data.iloc[:,:])
+plt.figure(figsize=(8,6))
+sns.heatmap(variables.corr())
+
+target = 'Diabetes_binary'
+train, test = train_test_split(data, random_state=22)
+
+# Train-Test Split
+X_train = train.drop(columns=[target]).copy()
+X_test = test.drop(columns=[target]).copy()
+
+y_train = train['Diabetes_binary'].copy()
+y_test = test['Diabetes_binary'].copy()
+
+# Feature Engineering
+chi2(X_train, y_train)
+chi2_p = chi2(X_train, y_train)[1]
+
+chi2_select_cols = []
+
+for pValue, colname in zip(chi2_p, cat_all):
+    if pValue < 0.01:
+        chi2_select_cols.append(colname)
+
+print(len(chi2_select_cols))
+chi2_select_cols
+
+selected_category_cols = [ 'Smoker',
+       'Stroke', 'HeartDiseaseorAttack','PhysActivity', 'Fruits', 'Veggies',
+       'HvyAlcoholConsump','Sex', 'Age']
+       
+CrossComb_train, CrossComb_test, colNames_new = methods.Binary_Cross_Combination(selected_category_cols, X_train, X_test)
+CrossComb_train
+
+sel = VarianceThreshold()
+sel.fit(CrossComb_train)
+CrossComb_cols = CrossComb_train.columns[sel.variances_ > 0.0099]
+CrossComb_cols
+# Cross combination of variables created
+
+from sklearn.feature_selection import chi2
+chi2(CrossComb_train[CrossComb_cols], y_train)
+chi2_p = chi2(CrossComb_train[CrossComb_cols], y_train)[1]
+
+chi2_CrossComb_cols = []
+
+for pValue, colname in zip(chi2_p, CrossComb_cols):
+    if pValue < 0.01:
+        chi2_CrossComb_cols.append(colname)
+
+print(len(chi2_CrossComb_cols))
+
+## Run trial machine learning test using LGBM
+train_X = CrossComb_train[chi2_CrossComb_cols]
+train_y = y_train
+test_X = CrossComb_test[chi2_CrossComb_cols]
+test_y = y_test
+from lightgbm import LGBMClassifier
+lgbm = LGBMClassifier()
+lgbm.fit(train_X,train_y)
+y_pred_xgb = lgbm.predict(test_X)
+acc_lgbm = round(lgbm.score(test_X,test_y)*100,2)
+print('Light GBM:',str(acc_lgbm)+'%')
+
+## Introducing other errors for validation
+lgbm.fit(train_X,train_y)
+y_pred_train = lgbm.predict(train_X)
+acc_train = accuracy_score(train_y,y_pred_train)
+print("Train accuracy: {:.2f}".format(acc_train))
+
+y_pred_lgbm = lgbm.predict(test_X)
+acc_rf = accuracy_score(test_y,y_pred_lgbm)
+print("Test set accuracy: {:.2f}".format(acc_rf))
+
+acc_CV = cross_val_score(lgbm,train_X,train_y,cv = 2,scoring = 'accuracy',n_jobs=-1)
+acc_CV = acc_CV.mean()
+
+# Create a pd.Series of features importances
+importances_rf = pd.Series(lgbm.feature_importances_,
+index = CrossComb_train[chi2_CrossComb_cols].columns)
+# Sort importances_rf
+sorted_importances_rf = importances_rf.sort_values(ascending=True)
+# Make a horizontal bar plot
+sorted_importances_rf[-10:-1].plot(kind='barh', color='blue')
+plt.show()
+print('CV accuracy: {:.2f}'.format(acc_CV))
