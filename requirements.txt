@@ -1,0 +1,11 @@
+imblearn
+matplotlib
+numpy
+optuna
+pandas
+plotly
+scipy
+seaborn
+session_info
+sklearn
+xgboost
