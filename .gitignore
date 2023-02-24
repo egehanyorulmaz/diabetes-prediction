@@ -1,0 +1,9 @@
+# fill the default .gitignore file for python
+venv/
+*.pyc
+*.pyo
+__pycache__/
+*.xml
+.ipynb_checkpoints/
+*.iml
+.idea/
