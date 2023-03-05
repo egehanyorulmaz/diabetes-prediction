@@ -7,3 +7,4 @@ __pycache__/
 .ipynb_checkpoints/
 *.iml
 .idea/
+.DS_Store
